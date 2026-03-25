@@ -1,8 +1,13 @@
 # RAD 符文监控系统
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Bitcoin Runes](https://img.shields.io/badge/Bitcoin-Runes-orange)](https://docs.ordinals.com/runes.html)
+
 🚨 自动监控比特币链上 RAD 符文代币的前100持币地址变化和大额交易，并通过邮件发送提醒。
 
-## 功能特性
+## ✨ 功能特性
 
 - ✅ 自动监控前100名持币地址
 - 📊 每小时自动更新数据
@@ -265,13 +270,25 @@ npm run watch
 
 （暂未实现测试）
 
-## 许可证
+## 📜 许可证
 
-MIT
+本项目基于 [MIT License](LICENSE) 开源。
 
-## 贡献
+Copyright (c) 2025 [cz](https://github.com/czhao1986716-glitch)
+
+## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 提交 Pull Request
+
+## 👨‍💻 作者
+
+**cz** - [GitHub](https://github.com/czhao1986716-glitch)
 
 ## 免责声明
 
