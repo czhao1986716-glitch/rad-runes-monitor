@@ -329,8 +329,8 @@
         const RUNE_ID = '907897:2259';
         const API_BASE = 'https://open-api.unisat.io/v1/indexer/runes';
 
-        // 调试模式
-        const DEBUG = true;
+        // 调试模式（成功后关闭）
+        const DEBUG = false;
 
         // 格式化数字
         function formatNumber(num) {
@@ -466,16 +466,21 @@
             }
         }
 
+        // 获取持仓数量（兼容 amount 和 balance 字段）
+        function getHolderAmount(holder) {
+            return parseFloat(holder.amount || holder.balance || 0);
+        }
+
         // 更新统计数据
         function updateStats(holders) {
             const totalHolders = holders.length;
-            const totalBalance = holders.reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
+            const totalBalance = holders.reduce((sum, h) => sum + getHolderAmount(h), 0);
             const maxHolder = holders[0];
-            const top10Balance = holders.slice(0, 10).reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
+            const top10Balance = holders.slice(0, 10).reduce((sum, h) => sum + getHolderAmount(h), 0);
             const top10Ratio = totalBalance > 0 ? ((top10Balance / totalBalance) * 100).toFixed(2) : '0.00';
 
             document.getElementById('holdersCount').textContent = totalHolders;
-            document.getElementById('maxHolder').textContent = formatNumber(maxHolder.balance);
+            document.getElementById('maxHolder').textContent = formatNumber(getHolderAmount(maxHolder));
             document.getElementById('top10Ratio').textContent = top10Ratio + '%';
             document.getElementById('totalBalance').textContent = formatNumber(totalBalance);
         }
@@ -487,8 +492,8 @@
             tbody.innerHTML = holders.map((holder, index) => {
                 const rank = index + 1;
                 const isTopHolder = rank <= 10;
-                const balance = parseFloat(holder.balance || 0);
-                const totalBalance = holders.reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
+                const balance = getHolderAmount(holder);
+                const totalBalance = holders.reduce((sum, h) => sum + getHolderAmount(h), 0);
                 const percentage = totalBalance > 0 ? ((balance / totalBalance) * 100).toFixed(4) : '0.0000';
 
                 return `
@@ -510,10 +515,10 @@
 
             // 准备数据：前10名 + 其他
             const top10 = holders.slice(0, 10);
-            const otherBalance = holders.slice(10).reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
+            const otherBalance = holders.slice(10).reduce((sum, h) => sum + getHolderAmount(h), 0);
 
             const labels = [...top10.map((h, i) => `#${i + 1}`), '其他'];
-            const data = [...top10.map(h => parseFloat(h.balance || 0)), otherBalance];
+            const data = [...top10.map(h => getHolderAmount(h)), otherBalance];
 
             const colors = [
                 '#667eea', '#764ba2', '#f093fb', '#4facfe',
