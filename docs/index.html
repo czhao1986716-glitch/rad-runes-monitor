@@ -20,7 +20,8 @@
             --text-muted: #adb5bd;
             --border-color: #dee2e6;
             --accent: #000000;
-            --accent-light: #f8f9fa;
+            --success: #28a745;
+            --danger: #dc3545;
         }
 
         body {
@@ -71,7 +72,7 @@
         .live-indicator {
             width: 8px;
             height: 8px;
-            background: #28a745;
+            background: var(--success);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
@@ -128,7 +129,7 @@
             color: var(--text-secondary);
         }
 
-        .content-section {
+        .intelligence-section {
             background: var(--bg-primary);
             border: 1px solid var(--border-color);
             margin-bottom: 24px;
@@ -151,6 +152,83 @@
         .section-meta {
             font-size: 0.875rem;
             color: var(--text-secondary);
+        }
+
+        .intelligence-list {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+
+        .intelligence-item {
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .intelligence-item:last-child {
+            border-bottom: none;
+        }
+
+        .intelligence-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .intelligence-badge.increase {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .intelligence-badge.decrease {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .intelligence-badge.new {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .intelligence-address {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            font-size: 0.875rem;
+            flex: 1;
+        }
+
+        .intelligence-change {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .intelligence-change.positive {
+            color: var(--success);
+        }
+
+        .intelligence-change.negative {
+            color: var(--danger);
+        }
+
+        .intelligence-rank {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-intelligence {
+            padding: 40px 32px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
         }
 
         .table-container {
@@ -221,6 +299,33 @@
         .percentage.high {
             color: var(--text-primary);
             font-weight: 600;
+        }
+
+        .trend {
+            text-align: center;
+            width: 100px;
+        }
+
+        .trend-icon {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .trend-icon.up {
+            color: var(--success);
+        }
+
+        .trend-icon.down {
+            color: var(--danger);
+        }
+
+        .trend-icon.neutral {
+            color: var(--text-muted);
+        }
+
+        .trend-value {
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
         .loading {
@@ -328,19 +433,19 @@
                 padding: 12px 8px;
                 font-size: 0.875rem;
             }
-        }
 
-        /* 数据变化提示 */
-        .change-indicator {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            margin-left: 8px;
-        }
+            .trend {
+                width: 60px;
+            }
 
-        .change-indicator.new {
-            background: #28a745;
+            .intelligence-item {
+                flex-wrap: wrap;
+                padding: 16px;
+            }
+
+            .intelligence-address {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -356,7 +461,7 @@
 
     <div class="container">
         <div class="info-note">
-            <strong>💡 数据说明：</strong> 本页面显示 RAD 符文（ID: 907897:2259）的前100持币地址实时数据。数据每小时自动刷新，您也可以点击下方按钮手动更新。对比不同时间点的数据可以发现持仓变化。
+            <strong>💡 数据说明：</strong> 本页面显示 RAD 符文（ID: 907897:2259）的前100持币地址实时数据。总量：1,000,000,000 RAD。增减数据基于本地存储的历史对比，变化阈值：1,000,000 RAD。
         </div>
 
         <div id="errorContainer"></div>
@@ -388,6 +493,19 @@
             <button class="refresh-btn" onclick="loadData()">刷新数据</button>
         </div>
 
+        <!-- 情报版块 -->
+        <div class="intelligence-section">
+            <div class="section-header">
+                <h2>🎯 大户动向情报</h2>
+                <div class="section-meta">
+                    增减持超过 1,000,000 RAD
+                </div>
+            </div>
+            <ul class="intelligence-list" id="intelligenceList">
+                <li class="empty-intelligence">首次加载，暂无变化数据。刷新后将显示增减情报。</li>
+            </ul>
+        </div>
+
         <div class="content-section">
             <div class="section-header">
                 <h2>前100持币地址</h2>
@@ -403,10 +521,11 @@
                             <th>地址</th>
                             <th>持仓数量</th>
                             <th>占比</th>
+                            <th class="trend">变化</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td colspan="4" class="loading">正在加载数据</td></tr>
+                        <tr><td colspan="5" class="loading">正在加载数据</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -422,9 +541,14 @@
     </div>
 
     <script>
-        // RAD 符文 ID
-        const RUNE_ID = '907897:2259';
-        const API_BASE = 'https://open-api.unisat.io/v1/indexer/runes';
+        // RAD 符文配置
+        const CONFIG = {
+            RUNE_ID: '907897:2259',
+            API_BASE: 'https://open-api.unisat.io/v1/indexer/runes',
+            TOTAL_SUPPLY: 1000000000,  // 10亿总量
+            CHANGE_THRESHOLD: 1000000,  // 100万变化阈值
+            STORAGE_KEY: 'rad_holders_history'
+        };
 
         // 格式化数字
         function formatNumber(num) {
@@ -468,7 +592,7 @@
         // 从 UniSat API 获取持币数据
         async function fetchHoldersFromUniSat() {
             try {
-                const response = await fetch(`${API_BASE}/${RUNE_ID}/holders?limit=100`, {
+                const response = await fetch(`${CONFIG.API_BASE}/${CONFIG.RUNE_ID}/holders?limit=100`, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
@@ -508,6 +632,125 @@
             return rawAmount / 100;
         }
 
+        // 保存数据到本地存储
+        function saveToLocalStorage(holders) {
+            const data = {
+                timestamp: Date.now(),
+                holders: holders.map(h => ({
+                    address: h.address,
+                    amount: h.amount
+                }))
+            };
+            localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data));
+        }
+
+        // 从本地存储加载上次数据
+        function loadFromLocalStorage() {
+            try {
+                const data = localStorage.getItem(CONFIG.STORAGE_KEY);
+                if (!data) return null;
+                const parsed = JSON.parse(data);
+                // 数据超过24小时则失效
+                if (Date.now() - parsed.timestamp > 24 * 60 * 60 * 1000) {
+                    return null;
+                }
+                return parsed;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        // 对比数据，计算变化
+        function compareHolders(currentHolders, previousHolders) {
+            if (!previousHolders) return [];
+
+            const changes = [];
+            const currentMap = new Map(currentHolders.map(h => [h.address, getHolderAmount(h)]));
+            const previousMap = new Map(previousHolders.holders.map(h => [h.address, parseFloat(h.amount) / 100]));
+
+            // 检查当前地址的变化
+            for (const [address, currentAmount] of currentMap) {
+                const previousAmount = previousMap.get(address) || 0;
+                const change = currentAmount - previousAmount;
+
+                if (Math.abs(change) >= CONFIG.CHANGE_THRESHOLD) {
+                    changes.push({
+                        address,
+                        currentAmount,
+                        previousAmount,
+                        change,
+                        type: change > 0 ? 'increase' : 'decrease'
+                    });
+                }
+            }
+
+            // 检查消失的地址（退出前100）
+            for (const [address, previousAmount] of previousMap) {
+                if (!currentMap.has(address) && previousAmount >= CONFIG.CHANGE_THRESHOLD) {
+                    changes.push({
+                        address,
+                        currentAmount: 0,
+                        previousAmount,
+                        change: -previousAmount,
+                        type: 'decrease'
+                    });
+                }
+            }
+
+            // 按变化量排序
+            changes.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+
+            return changes;
+        }
+
+        // 更新情报版块
+        function updateIntelligence(changes) {
+            const container = document.getElementById('intelligenceList');
+
+            if (changes.length === 0) {
+                container.innerHTML = '<li class="empty-intelligence">暂无大户增减情报（变化阈值：1,000,000 RAD）</li>';
+                return;
+            }
+
+            container.innerHTML = changes.slice(0, 10).map(change => {
+                const badgeClass = change.change > 0 ? 'increase' : 'decrease';
+                const badgeText = change.change > 0 ? '增持' : '减持';
+                const changeClass = change.change > 0 ? 'positive' : 'negative';
+                const changeSymbol = change.change > 0 ? '+' : '';
+                const formattedChange = formatNumber(Math.abs(change.change));
+
+                return `
+                    <li class="intelligence-item">
+                        <span class="intelligence-badge ${badgeClass}">${badgeText}</span>
+                        <span class="intelligence-address">${formatAddress(change.address)}</span>
+                        <span class="intelligence-change ${changeClass}">
+                            ${changeSymbol}${formattedChange}
+                        </span>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        // 获取趋势图标
+        function getTrendIcon(currentAmount, previousAmount) {
+            if (!previousAmount) {
+                return { icon: '−', class: 'neutral', value: '首次' };
+            }
+
+            const change = currentAmount - previousAmount;
+            const changePercent = previousAmount > 0 ? ((change / previousAmount) * 100) : 0;
+
+            if (Math.abs(change) < 1) {
+                return { icon: '−', class: 'neutral', value: '持平' };
+            }
+
+            if (change > 0) {
+                return { icon: '↑', class: 'up', value: `+${formatNumber(change)}` };
+            } else {
+                return { icon: '↓', class: 'down', value: formatNumber(change) };
+            }
+        }
+
         // 加载数据
         async function loadData() {
             const btn = document.querySelector('.refresh-btn');
@@ -519,16 +762,27 @@
             document.getElementById('errorContainer').innerHTML = '';
 
             try {
-                const holders = await fetchHoldersFromUniSat();
+                const currentHolders = await fetchHoldersFromUniSat();
 
-                if (!holders || holders.length === 0) {
+                if (!currentHolders || currentHolders.length === 0) {
                     showError('未获取到持币数据');
                     return;
                 }
 
-                updateStats(holders);
-                updateHoldersTable(holders);
+                // 获取历史数据
+                const previousData = loadFromLocalStorage();
+
+                // 计算变化
+                const changes = previousData ? compareHolders(currentHolders, previousData.holders) : [];
+
+                // 更新UI
+                updateStats(currentHolders);
+                updateHoldersTable(currentHolders, previousData ? previousData.holders : null);
+                updateIntelligence(changes);
                 document.getElementById('lastUpdate').textContent = `更新于 ${formatTime(Date.now())}`;
+
+                // 保存当前数据
+                saveToLocalStorage(currentHolders);
 
             } catch (error) {
                 showError(error.message || '获取数据失败，请稍后重试');
@@ -546,7 +800,7 @@
             const totalBalance = holders.reduce((sum, h) => sum + getHolderAmount(h), 0);
             const maxHolder = holders[0];
             const top10Balance = holders.slice(0, 10).reduce((sum, h) => sum + getHolderAmount(h), 0);
-            const top10Ratio = totalBalance > 0 ? ((top10Balance / totalBalance) * 100).toFixed(2) : '0.00';
+            const top10Ratio = ((top10Balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
 
             document.getElementById('holdersCount').textContent = totalHolders;
             document.getElementById('maxHolder').textContent = formatNumber(getHolderAmount(maxHolder));
@@ -555,16 +809,27 @@
         }
 
         // 更新持币表格
-        function updateHoldersTable(holders) {
+        function updateHoldersTable(currentHolders, previousHolders) {
             const tbody = document.querySelector('#holdersTable tbody');
-            const totalBalance = holders.reduce((sum, h) => sum + getHolderAmount(h), 0);
 
-            tbody.innerHTML = holders.map((holder, index) => {
+            // 创建前一次数据的映射
+            const previousMap = new Map();
+            if (previousHolders) {
+                previousHolders.forEach(h => {
+                    previousMap.set(h.address, parseFloat(h.amount) / 100);
+                });
+            }
+
+            tbody.innerHTML = currentHolders.map((holder, index) => {
                 const rank = index + 1;
                 const isTop10 = rank <= 10;
                 const balance = getHolderAmount(holder);
-                const percentage = totalBalance > 0 ? ((balance / totalBalance) * 100).toFixed(2) : '0.00';
+                const percentage = ((balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
                 const isHighPercentage = parseFloat(percentage) >= 1;
+
+                // 获取趋势
+                const previousBalance = previousMap.get(holder.address);
+                const trend = getTrendIcon(balance, previousBalance);
 
                 return `
                     <tr>
@@ -572,11 +837,15 @@
                         <td class="address">${formatAddress(holder.address)}</td>
                         <td class="balance">${formatNumber(balance)}</td>
                         <td class="percentage ${isHighPercentage ? 'high' : ''}">${percentage}%</td>
+                        <td class="trend">
+                            <div class="trend-icon ${trend.class}">${trend.icon}</div>
+                            <div class="trend-value">${trend.value}</div>
+                        </td>
                     </tr>
                 `;
             }).join('');
 
-            document.getElementById('recordCount').textContent = `共 ${holders.length} 条记录`;
+            document.getElementById('recordCount').textContent = `共 ${currentHolders.length} 条记录`;
         }
 
         // 页面加载时初始化
