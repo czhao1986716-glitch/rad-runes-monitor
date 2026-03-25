@@ -214,6 +214,18 @@
             color: white;
         }
 
+        .debug-info {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-size: 0.85em;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
         @media (max-width: 1024px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -247,6 +259,7 @@
         </div>
 
         <div id="errorContainer"></div>
+        <div id="debugContainer"></div>
 
         <div class="stats-grid">
             <div class="stat-card">
@@ -316,6 +329,9 @@
         const RUNE_ID = '907897:2259';
         const API_BASE = 'https://open-api.unisat.io/v1/indexer/runes';
 
+        // 调试模式
+        const DEBUG = true;
+
         // 格式化数字
         function formatNumber(num) {
             if (!num) return '0';
@@ -336,6 +352,13 @@
             return new Date(timestamp).toLocaleString('zh-CN');
         }
 
+        // 显示调试信息
+        function showDebug(message) {
+            if (!DEBUG) return;
+            const debugContainer = document.getElementById('debugContainer');
+            debugContainer.innerHTML += `<div class="debug-info">${message}</div>`;
+        }
+
         // 显示错误信息
         function showError(message) {
             const errorContainer = document.getElementById('errorContainer');
@@ -350,24 +373,50 @@
         // 从 UniSat API 获取持币数据
         async function fetchHoldersFromUniSat() {
             try {
-                const response = await fetch(`${API_BASE}/${RUNE_ID}/holders?limit=100`, {
+                const url = `${API_BASE}/${RUNE_ID}/holders?limit=100`;
+                showDebug(`请求 URL: ${url}`);
+
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
                     }
                 });
 
+                showDebug(`响应状态: ${response.status}`);
+
                 if (!response.ok) {
                     throw new Error(`API 请求失败: ${response.status} ${response.statusText}`);
                 }
 
                 const result = await response.json();
+                showDebug(`API 响应: ${JSON.stringify(result, null, 2)}`);
 
-                if (result.code !== 0) {
-                    throw new Error(result.message || 'API 返回错误');
+                // UniSat API 返回格式：{ code: 0, msg: "", data: [...] }
+                // 或者可能在 result.data.list 或 result.data.detail
+                let holders = [];
+
+                if (result.code === 0 && result.data) {
+                    // 检查 data 的类型
+                    if (Array.isArray(result.data)) {
+                        holders = result.data;
+                    } else if (result.data.list && Array.isArray(result.data.list)) {
+                        holders = result.data.list;
+                    } else if (result.data.detail && Array.isArray(result.data.detail)) {
+                        holders = result.data.detail;
+                    } else if (result.data.holders && Array.isArray(result.data.holders)) {
+                        holders = result.data.holders;
+                    } else {
+                        showDebug('data 对象的键: ' + Object.keys(result.data).join(', '));
+                        throw new Error('无法识别 API 返回的数据格式');
+                    }
+                } else {
+                    throw new Error(result.msg || result.message || 'API 返回错误');
                 }
 
-                return result.data || [];
+                showDebug(`提取到 ${holders.length} 条持币记录`);
+
+                return holders;
             } catch (error) {
                 console.error('获取数据失败:', error);
                 throw error;
@@ -381,6 +430,7 @@
             btn.textContent = '⏳ 加载中...';
 
             document.getElementById('errorContainer').innerHTML = '';
+            document.getElementById('debugContainer').innerHTML = '';
 
             try {
                 // 获取持币数据
@@ -403,6 +453,11 @@
                 // 更新时间
                 document.getElementById('lastUpdate').textContent = formatTime(Date.now());
 
+                // 隐藏调试信息（成功时）
+                setTimeout(() => {
+                    document.getElementById('debugContainer').innerHTML = '';
+                }, 5000);
+
             } catch (error) {
                 showError(error.message || '获取数据失败，请稍后重试');
             } finally {
@@ -417,7 +472,7 @@
             const totalBalance = holders.reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
             const maxHolder = holders[0];
             const top10Balance = holders.slice(0, 10).reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
-            const top10Ratio = ((top10Balance / totalBalance) * 100).toFixed(2);
+            const top10Ratio = totalBalance > 0 ? ((top10Balance / totalBalance) * 100).toFixed(2) : '0.00';
 
             document.getElementById('holdersCount').textContent = totalHolders;
             document.getElementById('maxHolder').textContent = formatNumber(maxHolder.balance);
@@ -432,13 +487,15 @@
             tbody.innerHTML = holders.map((holder, index) => {
                 const rank = index + 1;
                 const isTopHolder = rank <= 10;
-                const percentage = holder.percent ? holder.percent.toFixed(4) : '0.0000';
+                const balance = parseFloat(holder.balance || 0);
+                const totalBalance = holders.reduce((sum, h) => sum + parseFloat(h.balance || 0), 0);
+                const percentage = totalBalance > 0 ? ((balance / totalBalance) * 100).toFixed(4) : '0.0000';
 
                 return `
                     <tr ${isTopHolder ? 'class="top-holder"' : ''}>
                         <td>#${rank}</td>
                         <td class="address">${formatAddress(holder.address)}</td>
-                        <td style="font-weight: bold;">${formatNumber(holder.balance)}</td>
+                        <td style="font-weight: bold;">${formatNumber(balance)}</td>
                         <td>${percentage}%</td>
                     </tr>
                 `;
@@ -492,7 +549,7 @@
                                         return data.labels.map((label, i) => {
                                             const value = data.datasets[0].data[i];
                                             const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                            const percentage = ((value / total) * 100).toFixed(2);
+                                            const percentage = total > 0 ? ((value / total) * 100).toFixed(2) : '0.00';
                                             return {
                                                 text: `${label}: ${percentage}%`,
                                                 fillStyle: data.datasets[0].backgroundColor[i],
@@ -511,7 +568,7 @@
                                     const label = context.label || '';
                                     const value = context.parsed || 0;
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((value / total) * 100).toFixed(2);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(2) : '0.00';
                                     return `${label}: ${formatNumber(value)} RAD (${percentage}%)`;
                                 }
                             }
