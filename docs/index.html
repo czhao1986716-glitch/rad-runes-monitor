@@ -474,10 +474,10 @@
         <div id="errorContainer"></div>
 
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">持币地址数</div>
-                <div class="stat-value" id="holdersCount">-</div>
-                <div class="stat-subtitle">前100名地址</div>
+            <div class="stat-card" style="cursor: pointer;" onclick="showTotalHoldersChart()" id="totalHoldersCard">
+                <div class="stat-label">总持币地址数</div>
+                <div class="stat-value" id="totalHolders">-</div>
+                <div class="stat-subtitle" id="totalHoldersChange">点击查看历史趋势</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">最大持仓</div>
@@ -547,6 +547,23 @@
         </p>
     </div>
 
+    <!-- 图表模态框 -->
+    <div id="chartModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; padding: 20px;">
+        <div style="max-width: 900px; margin: 50px auto; background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; color: #333;">📈 总持币地址数历史趋势</h2>
+                <button onclick="closeChartModal()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px;">✕ 关闭</button>
+            </div>
+            <div style="height: 400px;">
+                <canvas id="holdersChart"></canvas>
+            </div>
+            <p style="text-align: center; color: #666; margin-top: 15px; font-size: 0.9em;">
+                数据每天0点自动快照保存
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         // RAD 符文配置
         const CONFIG = {
@@ -554,7 +571,8 @@
             API_BASE: 'https://open-api.unisat.io/v1/indexer/runes',
             TOTAL_SUPPLY: 1000000000,  // 10亿总量
             CHANGE_THRESHOLD: 1000000,  // 100万变化阈值
-            STORAGE_KEY: 'rad_holders_history'
+            STORAGE_KEY: 'rad_holders_history',
+            TOTAL_HOLDERS_KEY: 'rad_total_holders_history'  // 总持币地址数历史
         };
 
         // 格式化数字
@@ -629,17 +647,21 @@
                     if (result.data.detail) {
                         console.log('🔍 result.data.detail 长度:', result.data.detail.length);
                     }
+                    console.log('🔍 result.data.total:', result.data.total);
                 }
 
                 // 解析数据
                 let holders = [];
+                let totalHolders = 0;
                 if (result.code === 0 && result.data) {
                     if (Array.isArray(result.data)) {
                         holders = result.data;
                         console.log('✅ 数据格式: Array (直接数组)');
                     } else if (result.data.detail && Array.isArray(result.data.detail)) {
                         holders = result.data.detail;
+                        totalHolders = result.data.total || 0;
                         console.log('✅ 数据格式: data.detail，长度:', holders.length);
+                        console.log('✅ 总持币地址数:', totalHolders);
                     } else if (result.data.list && Array.isArray(result.data.list)) {
                         holders = result.data.list;
                         console.log('✅ 数据格式: data.list');
@@ -656,7 +678,7 @@
                     console.log('🔍 第一条数据样例:', holders[0]);
                 }
 
-                return holders;
+                return { holders, totalHolders };
             } catch (error) {
                 console.error('💥 获取持币数据失败:', error);
                 throw error;
@@ -694,6 +716,147 @@
                 return parsed;
             } catch (error) {
                 return null;
+            }
+        }
+
+        // 保存总持币地址数快照（每天0点或首次访问）
+        function saveTotalHoldersSnapshot(totalHolders) {
+            try {
+                const history = JSON.parse(localStorage.getItem(CONFIG.TOTAL_HOLDERS_KEY) || '[]');
+                const today = new Date();
+                const todayDate = today.toISOString().split('T')[0];  // YYYY-MM-DD
+
+                // 检查今天是否已有快照
+                const todaySnapshot = history.find(h => h.date === todayDate);
+
+                if (!todaySnapshot) {
+                    // 保存今天的快照（使用0点的时间戳）
+                    const midnight = new Date(today);
+                    midnight.setHours(0, 0, 0, 0);
+
+                    history.push({
+                        date: todayDate,
+                        timestamp: midnight.getTime(),
+                        totalHolders: totalHolders
+                    });
+
+                    // 只保留最近90天的数据
+                    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+                    const filteredHistory = history.filter(h => h.timestamp > ninetyDaysAgo);
+
+                    localStorage.setItem(CONFIG.TOTAL_HOLDERS_KEY, JSON.stringify(filteredHistory));
+                    console.log('💾 已保存今日总持币地址数快照:', totalHolders);
+                } else {
+                    console.log('ℹ️ 今日快照已存在，跳过保存');
+                }
+            } catch (error) {
+                console.error('❌ 保存快照失败:', error);
+            }
+        }
+
+        // 获取总持币地址数历史
+        function getTotalHoldersHistory() {
+            try {
+                const history = JSON.parse(localStorage.getItem(CONFIG.TOTAL_HOLDERS_KEY) || '[]');
+                return history.sort((a, b) => a.timestamp - b.timestamp);
+            } catch (error) {
+                console.error('❌ 读取历史数据失败:', error);
+                return [];
+            }
+        }
+
+        // 显示总持币地址数图表
+        let chartInstance = null;
+        function showTotalHoldersChart() {
+            const modal = document.getElementById('chartModal');
+            const history = getTotalHoldersHistory();
+
+            if (history.length === 0) {
+                alert('暂无历史数据。数据将从今天开始积累。');
+                return;
+            }
+
+            modal.style.display = 'block';
+
+            // 准备图表数据
+            const labels = history.map(h => {
+                const date = new Date(h.timestamp);
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            });
+            const data = history.map(h => h.totalHolders);
+
+            // 计算变化
+            const latest = history[history.length - 1];
+            const previous = history.length > 1 ? history[history.length - 2] : latest;
+            const change = latest.totalHolders - previous.totalHolders;
+            const changePercent = previous.totalHolders > 0
+                ? ((change / previous.totalHolders) * 100).toFixed(2)
+                : '0.00';
+
+            // 销毁旧图表
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            // 创建新图表
+            const ctx = document.getElementById('holdersChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '总持币地址数',
+                        data: data,
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgb(102, 126, 234)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `持币地址数: ${context.parsed.y.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 关闭图表模态框
+        function closeChartModal() {
+            document.getElementById('chartModal').style.display = 'none';
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('chartModal');
+            if (event.target === modal) {
+                closeChartModal();
             }
         }
 
@@ -826,14 +989,20 @@
             try {
                 // 获取持币数据
                 console.log('📡 请求持币数据...');
-                const currentHolders = await fetchHoldersFromUniSat();
+                const { holders: currentHolders, totalHolders } = await fetchHoldersFromUniSat();
 
                 console.log('✅ API 请求完成');
                 console.log('📊 持币数据数量:', currentHolders ? currentHolders.length : 'N/A');
+                console.log('👥 总持币地址数:', totalHolders);
 
                 if (!currentHolders || !Array.isArray(currentHolders) || currentHolders.length === 0) {
                     showError('未获取到持币数据，请检查API响应');
                     return;
+                }
+
+                // 保存总持币地址数快照
+                if (totalHolders > 0) {
+                    saveTotalHoldersSnapshot(totalHolders);
                 }
 
                 // 获取历史数据
@@ -846,7 +1015,7 @@
 
                 // 更新UI
                 console.log('🎨 开始更新UI...');
-                updateStats(currentHolders);
+                updateStats(currentHolders, totalHolders);
                 updateHoldersTable(currentHolders, previousData ? previousData.holders : null);
                 updateIntelligence(changes);
                 document.getElementById('lastUpdate').textContent = `更新于 ${formatTime(Date.now())}`;
@@ -869,14 +1038,36 @@
         }
 
         // 更新统计数据
-        function updateStats(holders) {
-            const totalHolders = holders.length;
+        function updateStats(holders, totalHoldersCount) {
+            const top100Holders = holders.length;
             const totalBalance = holders.reduce((sum, h) => sum + getHolderAmount(h), 0);
             const maxHolder = holders[0];
             const top10Balance = holders.slice(0, 10).reduce((sum, h) => sum + getHolderAmount(h), 0);
             const top10Ratio = ((top10Balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
 
-            document.getElementById('holdersCount').textContent = totalHolders;
+            // 更新总持币地址数
+            if (totalHoldersCount > 0) {
+                document.getElementById('totalHolders').textContent = totalHoldersCount.toLocaleString();
+
+                // 计算并显示日变化
+                const history = getTotalHoldersHistory();
+                if (history.length > 0) {
+                    const latest = history[history.length - 1];
+                    const change = totalHoldersCount - latest.totalHolders;
+                    if (change > 0) {
+                        document.getElementById('totalHoldersChange').innerHTML =
+                            `<span style="color: #28a745;">↑ +${change.toLocaleString()} 今日</span>`;
+                    } else if (change < 0) {
+                        document.getElementById('totalHoldersChange').innerHTML =
+                            `<span style="color: #dc3545;">↓ ${change.toLocaleString()} 今日</span>`;
+                    } else {
+                        document.getElementById('totalHoldersChange').textContent = '今日无变化';
+                    }
+                } else {
+                    document.getElementById('totalHoldersChange').textContent = '点击查看历史趋势';
+                }
+            }
+
             document.getElementById('maxHolder').textContent = formatNumber(getHolderAmount(maxHolder));
             document.getElementById('top10Ratio').textContent = top10Ratio + '%';
             document.getElementById('totalBalance').textContent = formatNumber(totalBalance);
