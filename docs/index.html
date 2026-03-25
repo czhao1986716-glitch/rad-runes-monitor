@@ -632,6 +632,7 @@
         // 从 UniSat API 获取符文信息（价格、市值等）
         async function fetchRuneInfo() {
             try {
+                console.log('🔍 正在获取符文信息...');
                 const response = await fetch(`${CONFIG.API_BASE}/${CONFIG.RUNE_ID}/info`, {
                     method: 'GET',
                     headers: {
@@ -639,20 +640,25 @@
                     }
                 });
 
+                console.log('📡 符文信息响应状态:', response.status);
+
                 if (!response.ok) {
-                    console.warn('获取符文信息失败:', response.status);
+                    console.warn('❌ 获取符文信息失败:', response.status);
                     return null;
                 }
 
                 const result = await response.json();
+                console.log('📦 符文信息响应数据:', result);
 
                 if (result.code === 0 && result.data) {
+                    console.log('✅ 符文信息获取成功');
                     return result.data;
                 }
 
+                console.warn('⚠️ 符文信息返回格式异常');
                 return null;
             } catch (error) {
-                console.warn('获取符文信息出错:', error);
+                console.error('💥 获取符文信息出错:', error);
                 return null;
             }
         }
@@ -660,6 +666,7 @@
         // 从 UniSat API 获取持币数据
         async function fetchHoldersFromUniSat() {
             try {
+                console.log('🔍 正在获取持币数据...');
                 const response = await fetch(`${CONFIG.API_BASE}/${CONFIG.RUNE_ID}/holders?limit=100`, {
                     method: 'GET',
                     headers: {
@@ -667,29 +674,47 @@
                     }
                 });
 
+                console.log('📡 持币数据响应状态:', response.status);
+
                 if (!response.ok) {
                     throw new Error(`API 请求失败: ${response.status}`);
                 }
 
                 const result = await response.json();
+                console.log('📦 持币数据响应结构:', {
+                    code: result.code,
+                    hasData: !!result.data,
+                    dataType: result.data ? typeof result.data : 'N/A',
+                    msg: result.msg
+                });
 
                 // 解析数据
                 let holders = [];
                 if (result.code === 0 && result.data) {
                     if (Array.isArray(result.data)) {
                         holders = result.data;
+                        console.log('✅ 数据格式: Array (直接数组)');
                     } else if (result.data.detail && Array.isArray(result.data.detail)) {
                         holders = result.data.detail;
+                        console.log('✅ 数据格式: data.detail');
                     } else if (result.data.list && Array.isArray(result.data.list)) {
                         holders = result.data.list;
+                        console.log('✅ 数据格式: data.list');
+                    } else {
+                        console.warn('⚠️ 未知的响应数据格式:', result.data);
                     }
                 } else {
                     throw new Error(result.msg || 'API 返回错误');
                 }
 
+                console.log(`📊 成功获取 ${holders.length} 条持币记录`);
+                if (holders.length > 0) {
+                    console.log('🔍 第一条数据样例:', holders[0]);
+                }
+
                 return holders;
             } catch (error) {
-                console.error('获取数据失败:', error);
+                console.error('💥 获取持币数据失败:', error);
                 throw error;
             }
         }
