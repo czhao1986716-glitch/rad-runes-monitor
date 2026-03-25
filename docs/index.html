@@ -586,8 +586,8 @@
         // 格式化地址
         function formatAddress(address) {
             if (!address) return 'N/A';
-            if (address.length <= 16) return address;
-            return `${address.substring(0, 10)}...${address.substring(address.length - 6)}`;
+            // 返回完整地址，不截断
+            return address;
         }
 
         // 格式化时间
