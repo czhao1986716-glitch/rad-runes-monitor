@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAD 符文监控仪表板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-card .subtitle {
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #666;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .badge-new {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-exit {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge-increase {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .badge-decrease {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-bottom: 15px;
+            transition: background 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+
+        .refresh-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .last-update {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+
+        .address {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #667eea;
+        }
+
+        .positive {
+            color: #28a745;
+        }
+
+        .negative {
+            color: #dc3545;
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 RAD 符文监控仪表板</h1>
+            <p>实时监控 RAD 持币前100地址变化和大额交易</p>
+        </div>
+
+        <div class="last-update">
+            最后更新：<span id="lastUpdate">加载中...</span>
+            <button class="refresh-btn" onclick="refreshData()">🔄 刷新数据</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>💰 总供应量</h3>
+                <div class="value" id="totalSupply">-</div>
+                <div class="subtitle">RAD 代币</div>
+            </div>
+            <div class="stat-card">
+                <h3>👥 持币地址数</h3>
+                <div class="value" id="holdersCount">-</div>
+                <div class="subtitle">前100名</div>
+            </div>
+            <div class="stat-card">
+                <h3>📊 前10大户占比</h3>
+                <div class="value" id="top10Concentration">-</div>
+                <div class="subtitle">集中度</div>
+            </div>
+            <div class="stat-card">
+                <h3>🔥 最近大额交易</h3>
+                <div class="value" id="largeTransactions">-</div>
+                <div class="subtitle">笔数</div>
+            </div>
+        </div>
+
+        <div class="content-grid">
+            <div class="card">
+                <h2>📊 前100持币地址</h2>
+                <div class="table-container">
+                    <table id="holdersTable">
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>地址</th>
+                                <th>持仓数量</th>
+                                <th>占比</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="4" class="loading">加载中</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📈 最近变化</h2>
+                <div id="recentChanges">
+                    <div class="loading">加载中</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>💸 大额交易记录</h2>
+            <div class="table-container">
+                <table id="transactionsTable">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>类型</th>
+                            <th>金额</th>
+                            <th>发送地址</th>
+                            <th>接收地址</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="5" class="loading">加载中</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 格式化数字
+        function formatNumber(num) {
+            return BigInt(num).toLocaleString('en-US');
+        }
+
+        // 格式化地址
+        function formatAddress(address) {
+            if (address.length <= 20) return address;
+            return `${address.substring(0, 10)}...${address.substring(address.length - 8)}`;
+        }
+
+        // 格式化时间
+        function formatTime(timestamp) {
+            return new Date(timestamp).toLocaleString('zh-CN');
+        }
+
+        // 加载统计数据
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const result = await response.json();
+
+                if (result.success) {
+                    const data = result.data;
+
+                    document.getElementById('totalSupply').textContent = formatNumber(data.totalSupply);
+                    document.getElementById('holdersCount').textContent = data.holdersCount;
+                    document.getElementById('top10Concentration').textContent = data.top10Concentration + '%';
+                    document.getElementById('largeTransactions').textContent = data.largeTransactions.total;
+                    document.getElementById('lastUpdate').textContent = formatTime(data.lastUpdate);
+                }
+            } catch (error) {
+                console.error('加载统计数据失败:', error);
+            }
+        }
+
+        // 加载持币地址
+        async function loadHolders() {
+            try {
+                const response = await fetch('/api/holders/latest');
+                const result = await response.json();
+
+                if (result.success) {
+                    const holders = result.data.holders;
+                    const tbody = document.querySelector('#holdersTable tbody');
+
+                    if (holders.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">暂无数据</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = holders.map(holder => `
+                        <tr>
+                            <td>#${holder.rank}</td>
+                            <td class="address">${formatAddress(holder.address)}</td>
+                            <td>${formatNumber(holder.balance)}</td>
+                            <td>${holder.percentage || '-'}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('加载持币地址失败:', error);
+            }
+        }
+
+        // 加载变化记录
+        async function loadChanges() {
+            try {
+                const response = await fetch('/api/changes?limit=20');
+                const result = await response.json();
+
+                if (result.success) {
+                    const changes = result.data.changes;
+                    const container = document.getElementById('recentChanges');
+
+                    if (changes.length === 0) {
+                        container.innerHTML = '<div class="empty-state">暂无变化记录</div>';
+                        return;
+                    }
+
+                    container.innerHTML = changes.slice(0, 15).map(change => {
+                        const badges = {
+                            new: '<span class="badge badge-new">🆕 新进入</span>',
+                            exit: '<span class="badge badge-exit">🚪 退出</span>',
+                            increase: '<span class="badge badge-increase">📈 增持</span>',
+                            decrease: '<span class="badge badge-decrease">📉 减持</span>',
+                        };
+
+                        const changeSymbol = change.change_type === 'increase' ? '+' : '';
+                        const changeClass = change.change_type === 'increase' ? 'positive' : 'negative';
+
+                        return `
+                            <div style="padding: 12px; border-bottom: 1px solid #eee;">
+                                <div style="margin-bottom: 5px;">${badges[change.change_type]}</div>
+                                <div class="address">${formatAddress(change.address)}</div>
+                                <div style="margin-top: 5px;">
+                                    <span class="${changeClass}">${changeSymbol}${formatNumber(change.balance_change)}</span>
+                                    <span style="color: #999; font-size: 0.9em; margin-left: 10px;">
+                                        排名: ${change.old_rank || '-'} → ${change.new_rank}
+                                    </span>
+                                </div>
+                                <div style="color: #999; font-size: 0.8em; margin-top: 5px;">
+                                    ${formatTime(change.timestamp)}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('加载变化记录失败:', error);
+            }
+        }
+
+        // 加载交易记录
+        async function loadTransactions() {
+            try {
+                const response = await fetch('/api/transactions');
+                const result = await response.json();
+
+                if (result.success) {
+                    const transactions = result.data.transactions;
+                    const tbody = document.querySelector('#transactionsTable tbody');
+
+                    if (transactions.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无交易记录</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = transactions.slice(0, 20).map(tx => `
+                        <tr>
+                            <td>${formatTime(tx.timestamp)}</td>
+                            <td>
+                                <span class="badge ${tx.type === 'buy' ? 'badge-increase' : 'badge-decrease'}">
+                                    ${tx.type === 'buy' ? '🟢 买入' : '🔴 卖出'}
+                                </span>
+                            </td>
+                            <td style="font-weight: bold;">${formatNumber(tx.amount)}</td>
+                            <td class="address">${formatAddress(tx.from_address)}</td>
+                            <td class="address">${formatAddress(tx.to_address)}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('加载交易记录失败:', error);
+            }
+        }
+
+        // 刷新所有数据
+        async function refreshData() {
+            const btn = document.querySelector('.refresh-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 刷新中...';
+
+            await Promise.all([
+                loadStats(),
+                loadHolders(),
+                loadChanges(),
+                loadTransactions()
+            ]);
+
+            btn.disabled = false;
+            btn.textContent = '🔄 刷新数据';
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+
+            // 每30秒自动刷新
+            setInterval(refreshData, 30000);
+        });
+    </script>
+</body>
+</html>

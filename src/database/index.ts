@@ -204,6 +204,27 @@ export class DatabaseManager {
   }
 
   /**
+   * 获取最近的大额交易
+   */
+  getRecentTransactions(limit: number = 50): LargeTransaction[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM large_transactions
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(limit) as any[];
+    return rows.map(row => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      txid: row.txid,
+      from_address: row.from_address,
+      to_address: row.to_address,
+      amount: row.amount,
+      type: row.type,
+    }));
+  }
+
+  /**
    * 关闭数据库连接
    */
   close(): void {

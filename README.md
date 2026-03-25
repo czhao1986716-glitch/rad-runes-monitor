@@ -16,6 +16,7 @@
 - 🆕 新大户进入/退出提醒
 - 📧 精美的HTML邮件通知
 - 💾 SQLite 数据库存储历史数据
+- 🌐 **Web 可视化界面**（实时查看数据）
 
 ## 系统架构
 
@@ -28,12 +29,17 @@ radfi/
 │   │   └── index.ts
 │   ├── database/            # 数据库模块
 │   │   └── index.ts         # SQLite 数据存储
+│   ├── routes/              # API 路由
+│   │   └── api.ts           # Web API 接口
 │   ├── services/            # 业务服务
 │   │   ├── monitorService.ts # 监控核心逻辑
 │   │   └── emailService.ts   # 邮件提醒服务
 │   ├── types/               # 类型定义
 │   │   └── index.ts
-│   └── index.ts             # 主程序入口
+│   ├── server.ts            # Web 服务器
+│   └── index.ts             # 监控程序入口
+├── public/                  # 前端静态文件
+│   └── index.html           # Web 仪表板
 ├── package.json
 ├── tsconfig.json
 ├── .env.example             # 环境变量模板
@@ -93,12 +99,30 @@ npm run build
 ### 5. 启动监控系统
 
 ```bash
-# 开发模式（带自动重载）
-npm run dev
+# 编译代码
+npm run build
 
-# 生产模式
+# 启动监控程序（后台监控）
 npm start
 ```
+
+### 6. 启动 Web 界面（可选）
+
+如果想通过浏览器查看数据：
+
+```bash
+# 启动 Web 服务器
+npm run web
+```
+
+然后在浏览器中打开：**http://localhost:3000**
+
+Web 界面提供：
+- 📊 实时统计概览（总供应量、持币地址数、集中度等）
+- 📋 前100持币地址列表
+- 📈 持仓变化历史记录
+- 💸 大额交易记录
+- 🔄 自动每30秒刷新数据
 
 ## 监控内容
 
