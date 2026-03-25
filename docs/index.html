@@ -330,7 +330,7 @@
         const API_BASE = 'https://open-api.unisat.io/v1/indexer/runes';
 
         // 调试模式（成功后关闭）
-        const DEBUG = false;
+        const DEBUG = true;
 
         // 格式化数字
         function formatNumber(num) {
@@ -415,6 +415,7 @@
                 }
 
                 showDebug(`提取到 ${holders.length} 条持币记录`);
+                showDebug(`第1条数据示例: ${JSON.stringify(holders[0])}`);
 
                 return holders;
             } catch (error) {
@@ -454,9 +455,9 @@
                 document.getElementById('lastUpdate').textContent = formatTime(Date.now());
 
                 // 隐藏调试信息（成功时）
-                setTimeout(() => {
-                    document.getElementById('debugContainer').innerHTML = '';
-                }, 5000);
+                // setTimeout(() => {
+                //     document.getElementById('debugContainer').innerHTML = '';
+                // }, 5000);
 
             } catch (error) {
                 showError(error.message || '获取数据失败，请稍后重试');
