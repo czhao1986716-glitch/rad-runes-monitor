@@ -843,12 +843,19 @@
             // 24小时交易额可能字段：volume24h, volume24, volume1d
             const volume24h = parseFloat(runeInfo.volume24h || runeInfo.volume24 || runeInfo.volume1d || 0);
 
-            // 更新UI
-            document.getElementById('currentPrice').textContent = formatPrice(price);
-            document.getElementById('marketCap').textContent = formatCurrency(marketCap);
-            document.getElementById('volume24h').textContent = formatCurrency(volume24h);
-
-            console.log('价格信息已更新:', { price, marketCap, volume24h });
+            // 如果没有价格数据，显示友好提示
+            if (price === 0) {
+                document.getElementById('currentPrice').textContent = '暂无数据';
+                document.getElementById('marketCap').textContent = '暂无数据';
+                document.getElementById('volume24h').textContent = '暂无数据';
+                console.log('ℹ️ 价格数据暂不可用（RAD可能未在交易所上市）');
+            } else {
+                // 更新UI
+                document.getElementById('currentPrice').textContent = formatPrice(price);
+                document.getElementById('marketCap').textContent = formatCurrency(marketCap);
+                document.getElementById('volume24h').textContent = formatCurrency(volume24h);
+                console.log('价格信息已更新:', { price, marketCap, volume24h });
+            }
         }
 
         // 更新情报版块
