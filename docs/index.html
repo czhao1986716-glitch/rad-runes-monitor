@@ -346,6 +346,13 @@
             60%, 100% { content: '...'; }
         }
 
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
         .refresh-btn {
             background: var(--accent);
             color: var(--bg-primary);
@@ -755,7 +762,18 @@
 
         // 对比数据，计算变化
         function compareHolders(currentHolders, previousHolders) {
-            if (!previousHolders) return [];
+            console.log('🔄 开始对比数据...');
+
+            // 确保 currentHolders 是数组
+            if (!currentHolders || !Array.isArray(currentHolders)) {
+                console.error('💥 currentHolders 不是数组:', currentHolders);
+                return [];
+            }
+
+            if (!previousHolders || !previousHolders.holders || !Array.isArray(previousHolders.holders)) {
+                console.log('ℹ️ 没有历史数据，跳过对比');
+                return [];
+            }
 
             const changes = [];
             const currentMap = new Map(currentHolders.map(h => [h.address, getHolderAmount(h)]));
@@ -793,6 +811,7 @@
             // 按变化量排序
             changes.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
 
+            console.log(`✅ 对比完成，发现 ${changes.length} 个显著变化`);
             return changes;
         }
 
@@ -825,28 +844,40 @@
         function updateIntelligence(changes) {
             const container = document.getElementById('intelligenceList');
 
+            // 确保 changes 是数组
+            if (!changes || !Array.isArray(changes)) {
+                console.warn('⚠️ changes 不是数组:', changes);
+                container.innerHTML = '<li class="empty-intelligence">数据加载中...</li>';
+                return;
+            }
+
             if (changes.length === 0) {
                 container.innerHTML = '<li class="empty-intelligence">暂无大户增减情报（变化阈值：1,000,000 RAD）</li>';
                 return;
             }
 
-            container.innerHTML = changes.slice(0, 10).map(change => {
-                const badgeClass = change.change > 0 ? 'increase' : 'decrease';
-                const badgeText = change.change > 0 ? '增持' : '减持';
-                const changeClass = change.change > 0 ? 'positive' : 'negative';
-                const changeSymbol = change.change > 0 ? '+' : '';
-                const formattedChange = formatNumber(Math.abs(change.change));
+            try {
+                container.innerHTML = changes.slice(0, 10).map(change => {
+                    const badgeClass = change.change > 0 ? 'increase' : 'decrease';
+                    const badgeText = change.change > 0 ? '增持' : '减持';
+                    const changeClass = change.change > 0 ? 'positive' : 'negative';
+                    const changeSymbol = change.change > 0 ? '+' : '';
+                    const formattedChange = formatNumber(Math.abs(change.change));
 
-                return `
-                    <li class="intelligence-item">
-                        <span class="intelligence-badge ${badgeClass}">${badgeText}</span>
-                        <span class="intelligence-address">${formatAddress(change.address)}</span>
-                        <span class="intelligence-change ${changeClass}">
-                            ${changeSymbol}${formattedChange}
-                        </span>
-                    </li>
-                `;
-            }).join('');
+                    return `
+                        <li class="intelligence-item">
+                            <span class="intelligence-badge ${badgeClass}">${badgeText}</span>
+                            <span class="intelligence-address">${formatAddress(change.address)}</span>
+                            <span class="intelligence-change ${changeClass}">
+                                ${changeSymbol}${formattedChange}
+                            </span>
+                        </li>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('💥 更新情报版块失败:', error);
+                container.innerHTML = '<li class="empty-intelligence">数据加载失败</li>';
+            }
         }
 
         // 获取趋势图标
@@ -871,6 +902,7 @@
 
         // 加载数据
         async function loadData() {
+            console.log('🚀 ========== 开始加载数据 ==========');
             const btn = document.querySelector('.refresh-btn');
             if (btn) {
                 btn.disabled = true;
@@ -881,23 +913,31 @@
 
             try {
                 // 并行获取符文信息和持币数据
+                console.log('📡 并行请求符文信息和持币数据...');
                 const [runeInfo, currentHolders] = await Promise.all([
                     fetchRuneInfo(),
                     fetchHoldersFromUniSat()
                 ]);
 
-                if (!currentHolders || currentHolders.length === 0) {
-                    showError('未获取到持币数据');
+                console.log('✅ API 请求完成');
+                console.log('📦 符文信息:', runeInfo);
+                console.log('📊 持币数据数量:', currentHolders ? currentHolders.length : 'N/A');
+
+                if (!currentHolders || !Array.isArray(currentHolders) || currentHolders.length === 0) {
+                    showError('未获取到持币数据，请检查API响应');
                     return;
                 }
 
                 // 获取历史数据
                 const previousData = loadFromLocalStorage();
+                console.log('📜 历史数据:', previousData ? '已找到' : '未找到');
 
                 // 计算变化
-                const changes = previousData ? compareHolders(currentHolders, previousData.holders) : [];
+                const changes = compareHolders(currentHolders, previousData);
+                console.log('🔄 计算出的变化:', changes);
 
                 // 更新UI
+                console.log('🎨 开始更新UI...');
                 updatePriceInfo(runeInfo);  // 更新价格信息
                 updateStats(currentHolders);
                 updateHoldersTable(currentHolders, previousData ? previousData.holders : null);
@@ -906,8 +946,12 @@
 
                 // 保存当前数据
                 saveToLocalStorage(currentHolders);
+                console.log('💾 数据已保存到本地存储');
+                console.log('✅ ========== 数据加载完成 ==========');
 
             } catch (error) {
+                console.error('💥 数据加载失败:', error);
+                console.error('错误堆栈:', error.stack);
                 showError(error.message || '获取数据失败，请稍后重试');
             } finally {
                 if (btn) {
@@ -935,40 +979,57 @@
         function updateHoldersTable(currentHolders, previousHolders) {
             const tbody = document.querySelector('#holdersTable tbody');
 
-            // 创建前一次数据的映射
-            const previousMap = new Map();
-            if (previousHolders) {
-                previousHolders.forEach(h => {
-                    previousMap.set(h.address, parseFloat(h.amount) / 100);
-                });
+            // 确保 currentHolders 是数组
+            if (!currentHolders || !Array.isArray(currentHolders)) {
+                console.error('💥 currentHolders 不是数组:', currentHolders);
+                tbody.innerHTML = '<tr><td colspan="5" class="loading">数据格式错误</td></tr>';
+                return;
             }
 
-            tbody.innerHTML = currentHolders.map((holder, index) => {
-                const rank = index + 1;
-                const isTop10 = rank <= 10;
-                const balance = getHolderAmount(holder);
-                const percentage = ((balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
-                const isHighPercentage = parseFloat(percentage) >= 1;
+            if (currentHolders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无数据</td></tr>';
+                return;
+            }
 
-                // 获取趋势
-                const previousBalance = previousMap.get(holder.address);
-                const trend = getTrendIcon(balance, previousBalance);
+            try {
+                // 创建前一次数据的映射
+                const previousMap = new Map();
+                if (previousHolders && Array.isArray(previousHolders)) {
+                    previousHolders.forEach(h => {
+                        previousMap.set(h.address, parseFloat(h.amount) / 100);
+                    });
+                }
 
-                return `
-                    <tr>
-                        <td class="rank ${isTop10 ? 'top-10' : ''}">#${rank}</td>
-                        <td class="address">${formatAddress(holder.address)}</td>
-                        <td class="balance">${formatNumber(balance)}</td>
-                        <td class="percentage ${isHighPercentage ? 'high' : ''}">${percentage}%</td>
-                        <td class="trend">
-                            <div class="trend-icon ${trend.class}">${trend.icon}</div>
-                            <div class="trend-value">${trend.value}</div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+                tbody.innerHTML = currentHolders.map((holder, index) => {
+                    const rank = index + 1;
+                    const isTop10 = rank <= 10;
+                    const balance = getHolderAmount(holder);
+                    const percentage = ((balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
+                    const isHighPercentage = parseFloat(percentage) >= 1;
 
-            document.getElementById('recordCount').textContent = `共 ${currentHolders.length} 条记录`;
+                    // 获取趋势
+                    const previousBalance = previousMap.get(holder.address);
+                    const trend = getTrendIcon(balance, previousBalance);
+
+                    return `
+                        <tr>
+                            <td class="rank ${isTop10 ? 'top-10' : ''}">#${rank}</td>
+                            <td class="address">${formatAddress(holder.address)}</td>
+                            <td class="balance">${formatNumber(balance)}</td>
+                            <td class="percentage ${isHighPercentage ? 'high' : ''}">${percentage}%</td>
+                            <td class="trend">
+                                <div class="trend-icon ${trend.class}">${trend.icon}</div>
+                                <div class="trend-value">${trend.value}</div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                document.getElementById('recordCount').textContent = `共 ${currentHolders.length} 条记录`;
+            } catch (error) {
+                console.error('💥 更新持币表格失败:', error);
+                tbody.innerHTML = '<tr><td colspan="5" class="loading">数据渲染失败</td></tr>';
+            }
         }
 
         // 页面加载时初始化
