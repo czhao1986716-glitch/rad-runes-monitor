@@ -695,6 +695,16 @@
                     msg: result.msg
                 });
 
+                // 详细检查 data 对象的属性
+                if (result.data && typeof result.data === 'object') {
+                    console.log('🔍 result.data 的所有属性:', Object.keys(result.data));
+                    console.log('🔍 result.data.detail 是否存在:', !!result.data.detail);
+                    console.log('🔍 result.data.detail 类型:', Array.isArray(result.data.detail) ? 'Array' : typeof result.data.detail);
+                    if (result.data.detail) {
+                        console.log('🔍 result.data.detail 长度:', result.data.detail.length);
+                    }
+                }
+
                 // 解析数据
                 let holders = [];
                 if (result.code === 0 && result.data) {
@@ -703,12 +713,13 @@
                         console.log('✅ 数据格式: Array (直接数组)');
                     } else if (result.data.detail && Array.isArray(result.data.detail)) {
                         holders = result.data.detail;
-                        console.log('✅ 数据格式: data.detail');
+                        console.log('✅ 数据格式: data.detail，长度:', holders.length);
                     } else if (result.data.list && Array.isArray(result.data.list)) {
                         holders = result.data.list;
                         console.log('✅ 数据格式: data.list');
                     } else {
                         console.warn('⚠️ 未知的响应数据格式:', result.data);
+                        console.warn('⚠️ result.data 完整内容:', JSON.stringify(result.data, null, 2));
                     }
                 } else {
                     throw new Error(result.msg || 'API 返回错误');
