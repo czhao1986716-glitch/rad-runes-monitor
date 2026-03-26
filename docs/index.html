@@ -505,7 +505,7 @@
             <div class="section-header">
                 <h2>🎯 大户动向情报</h2>
                 <div class="section-meta">
-                    增减持超过 1,000,000 RAD
+                    最近24小时 · 增减持超过 1,000,000 RAD
                 </div>
             </div>
             <ul class="intelligence-list" id="intelligenceList">
@@ -529,10 +529,11 @@
                             <th>持仓数量</th>
                             <th>占比</th>
                             <th class="trend">变化</th>
+                            <th>历史</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td colspan="5" class="loading">正在加载数据</td></tr>
+                        <tr><td colspan="6" class="loading">正在加载数据</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -563,6 +564,27 @@
         </div>
     </div>
 
+    <!-- 地址历史模态框 -->
+    <div id="addressModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; padding: 20px;">
+        <div style="max-width: 900px; margin: 50px auto; background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; color: #333;">📊 地址持币历史</h2>
+                <button onclick="closeAddressModal()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px;">✕ 关闭</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <p style="color: #666; font-size: 0.9em; word-break: break-all;">
+                    <strong>地址：</strong><span id="addressModalAddress"></span>
+                </p>
+            </div>
+            <div style="height: 400px;">
+                <canvas id="addressChart"></canvas>
+            </div>
+            <p style="text-align: center; color: #666; margin-top: 15px; font-size: 0.9em;">
+                数据每天0点自动快照保存（显示前50地址）
+            </p>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         // RAD 符文配置
@@ -572,7 +594,9 @@
             TOTAL_SUPPLY: 1000000000,  // 10亿总量
             CHANGE_THRESHOLD: 1000000,  // 100万变化阈值
             STORAGE_KEY: 'rad_holders_history',
-            TOTAL_HOLDERS_KEY: 'rad_total_holders_history'  // 总持币地址数历史
+            TOTAL_HOLDERS_KEY: 'rad_total_holders_history',  // 总持币地址数历史
+            LARGE_TRANSACTIONS_KEY: 'rad_large_transactions_history',  // 大额交易历史
+            ADDRESS_SNAPSHOTS_KEY: 'rad_address_snapshots'  // 地址快照历史
         };
 
         // 格式化数字
@@ -852,11 +876,208 @@
             document.getElementById('chartModal').style.display = 'none';
         }
 
+        // 显示地址历史图表
+        let addressChartInstance = null;
+        function showAddressHistory(address) {
+            const modal = document.getElementById('addressModal');
+            const history = getAddressHistory(address);
+
+            if (history.length === 0) {
+                alert('该地址暂无历史数据。数据将从今天开始积累。');
+                return;
+            }
+
+            // 设置地址
+            document.getElementById('addressModalAddress').textContent = address;
+            modal.style.display = 'block';
+
+            // 准备图表数据
+            const labels = history.map(h => {
+                const date = new Date(h.timestamp);
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            });
+            const data = history.map(h => h.amount);
+
+            // 销毁旧图表
+            if (addressChartInstance) {
+                addressChartInstance.destroy();
+            }
+
+            // 创建新图表
+            const ctx = document.getElementById('addressChart').getContext('2d');
+            addressChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '持币数量',
+                        data: data,
+                        borderColor: 'rgb(255, 159, 64)',
+                        backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgb(255, 159, 64)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `持币: ${formatNumber(context.parsed.y)} RAD`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatNumber(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 关闭地址模态框
+        function closeAddressModal() {
+            document.getElementById('addressModal').style.display = 'none';
+        }
+
         // 点击模态框外部关闭
         window.onclick = function(event) {
-            const modal = document.getElementById('chartModal');
-            if (event.target === modal) {
+            const chartModal = document.getElementById('chartModal');
+            const addressModal = document.getElementById('addressModal');
+            if (event.target === chartModal) {
                 closeChartModal();
+            }
+            if (event.target === addressModal) {
+                closeAddressModal();
+            }
+        }
+
+        // 保存大额交易记录
+        function saveLargeTransaction(transaction) {
+            try {
+                const history = JSON.parse(localStorage.getItem(CONFIG.LARGE_TRANSACTIONS_KEY) || '[]');
+
+                // 检查是否已存在相同的交易（避免重复）
+                const isDuplicate = history.some(t =>
+                    t.address === transaction.address &&
+                    t.timestamp === transaction.timestamp &&
+                    t.change === transaction.change
+                );
+
+                if (!isDuplicate) {
+                    history.push(transaction);
+
+                    // 只保留最近7天的数据
+                    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                    const filteredHistory = history.filter(t => t.timestamp > sevenDaysAgo);
+
+                    localStorage.setItem(CONFIG.LARGE_TRANSACTIONS_KEY, JSON.stringify(filteredHistory));
+                    console.log('💾 已保存大额交易记录:', transaction);
+                }
+            } catch (error) {
+                console.error('❌ 保存大额交易失败:', error);
+            }
+        }
+
+        // 获取最近24小时的大额交易
+        function getRecentLargeTransactions() {
+            try {
+                const history = JSON.parse(localStorage.getItem(CONFIG.LARGE_TRANSACTIONS_KEY) || '[]');
+                const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+                // 筛选最近24小时的交易
+                const recentTransactions = history.filter(t => t.timestamp > twentyFourHoursAgo);
+
+                // 按时间倒序排序（最新的在前）
+                recentTransactions.sort((a, b) => b.timestamp - a.timestamp);
+
+                return recentTransactions;
+            } catch (error) {
+                console.error('❌ 读取大额交易历史失败:', error);
+                return [];
+            }
+        }
+
+        // 保存地址快照（每天一次）
+        function saveAddressSnapshots(holders) {
+            try {
+                const snapshots = JSON.parse(localStorage.getItem(CONFIG.ADDRESS_SNAPSHOTS_KEY) || '[]');
+                const today = new Date();
+                const todayDate = today.toISOString().split('T')[0];  // YYYY-MM-DD
+
+                // 检查今天是否已有快照
+                const todaySnapshot = snapshots.find(s => s.date === todayDate);
+
+                if (!todaySnapshot) {
+                    // 保存今天的快照（使用0点的时间戳）
+                    const midnight = new Date(today);
+                    midnight.setHours(0, 0, 0, 0);
+
+                    // 只保存前50个地址的快照，避免数据过大
+                    const snapshot = {
+                        date: todayDate,
+                        timestamp: midnight.getTime(),
+                        addresses: holders.slice(0, 50).map(h => ({
+                            address: h.address,
+                            amount: getHolderAmount(h)
+                        }))
+                    };
+
+                    snapshots.push(snapshot);
+
+                    // 只保留最近90天的数据
+                    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+                    const filteredSnapshots = snapshots.filter(s => s.timestamp > ninetyDaysAgo);
+
+                    localStorage.setItem(CONFIG.ADDRESS_SNAPSHOTS_KEY, JSON.stringify(filteredSnapshots));
+                    console.log('💾 已保存今日地址快照');
+                } else {
+                    console.log('ℹ️ 今日地址快照已存在，跳过保存');
+                }
+            } catch (error) {
+                console.error('❌ 保存地址快照失败:', error);
+            }
+        }
+
+        // 获取指定地址的历史数据
+        function getAddressHistory(address) {
+            try {
+                const snapshots = JSON.parse(localStorage.getItem(CONFIG.ADDRESS_SNAPSHOTS_KEY) || '[]');
+
+                // 提取该地址的所有历史数据
+                const history = snapshots
+                    .map(s => {
+                        const addrData = s.addresses.find(a => a.address === address);
+                        return {
+                            date: s.date,
+                            timestamp: s.timestamp,
+                            amount: addrData ? addrData.amount : 0
+                        };
+                    })
+                    .filter(h => h.amount > 0)  // 只保留有数据的记录
+                    .sort((a, b) => a.timestamp - b.timestamp);  // 按时间正序排序
+
+                return history;
+            } catch (error) {
+                console.error('❌ 读取地址历史失败:', error);
+                return [];
             }
         }
 
@@ -885,26 +1106,38 @@
                 const change = currentAmount - previousAmount;
 
                 if (Math.abs(change) >= CONFIG.CHANGE_THRESHOLD) {
-                    changes.push({
+                    const changeRecord = {
                         address,
                         currentAmount,
                         previousAmount,
                         change,
-                        type: change > 0 ? 'increase' : 'decrease'
-                    });
+                        type: change > 0 ? 'increase' : 'decrease',
+                        timestamp: Date.now()  // 记录时间戳
+                    };
+
+                    changes.push(changeRecord);
+
+                    // 保存到大额交易历史记录
+                    saveLargeTransaction(changeRecord);
                 }
             }
 
             // 检查消失的地址（退出前100）
             for (const [address, previousAmount] of previousMap) {
                 if (!currentMap.has(address) && previousAmount >= CONFIG.CHANGE_THRESHOLD) {
-                    changes.push({
+                    const changeRecord = {
                         address,
                         currentAmount: 0,
                         previousAmount,
                         change: -previousAmount,
-                        type: 'decrease'
-                    });
+                        type: 'decrease',
+                        timestamp: Date.now()  // 记录时间戳
+                    };
+
+                    changes.push(changeRecord);
+
+                    // 保存到大额交易历史记录
+                    saveLargeTransaction(changeRecord);
                 }
             }
 
@@ -926,26 +1159,35 @@
                 return;
             }
 
-            if (changes.length === 0) {
+            // 获取最近24小时的所有大额交易记录
+            const recentTransactions = getRecentLargeTransactions();
+
+            if (recentTransactions.length === 0) {
                 container.innerHTML = '<li class="empty-intelligence">暂无大户增减情报（变化阈值：1,000,000 RAD）</li>';
                 return;
             }
 
             try {
-                container.innerHTML = changes.slice(0, 10).map(change => {
-                    const badgeClass = change.change > 0 ? 'increase' : 'decrease';
-                    const badgeText = change.change > 0 ? '增持' : '减持';
-                    const changeClass = change.change > 0 ? 'positive' : 'negative';
-                    const changeSymbol = change.change > 0 ? '+' : '';
-                    const formattedChange = formatNumber(Math.abs(change.change));
+                container.innerHTML = recentTransactions.slice(0, 20).map(transaction => {
+                    const badgeClass = transaction.change > 0 ? 'increase' : 'decrease';
+                    const badgeText = transaction.change > 0 ? '增持' : '减持';
+                    const changeClass = transaction.change > 0 ? 'positive' : 'negative';
+                    const changeSymbol = transaction.change > 0 ? '+' : '';
+                    const formattedChange = formatNumber(Math.abs(transaction.change));
+
+                    // 格式化时间
+                    const time = new Date(transaction.timestamp);
+                    const timeStr = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
+                    const dateStr = `${time.getMonth() + 1}/${time.getDate()}`;
 
                     return `
                         <li class="intelligence-item">
                             <span class="intelligence-badge ${badgeClass}">${badgeText}</span>
-                            <span class="intelligence-address">${formatAddress(change.address)}</span>
+                            <span class="intelligence-address">${formatAddress(transaction.address)}</span>
                             <span class="intelligence-change ${changeClass}">
                                 ${changeSymbol}${formattedChange}
                             </span>
+                            <span style="font-size: 0.75rem; color: #999; margin-left: auto;">${dateStr} ${timeStr}</span>
                         </li>
                     `;
                 }).join('');
@@ -1004,6 +1246,9 @@
                 if (totalHolders > 0) {
                     saveTotalHoldersSnapshot(totalHolders);
                 }
+
+                // 保存地址快照（每天一次）
+                saveAddressSnapshots(currentHolders);
 
                 // 获取历史数据
                 const previousData = loadFromLocalStorage();
@@ -1080,12 +1325,12 @@
             // 确保 currentHolders 是数组
             if (!currentHolders || !Array.isArray(currentHolders)) {
                 console.error('💥 currentHolders 不是数组:', currentHolders);
-                tbody.innerHTML = '<tr><td colspan="5" class="loading">数据格式错误</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">数据格式错误</td></tr>';
                 return;
             }
 
             if (currentHolders.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无数据</td></tr>';
                 return;
             }
 
@@ -1119,6 +1364,16 @@
                                 <div class="trend-icon ${trend.class}">${trend.icon}</div>
                                 <div class="trend-value">${trend.value}</div>
                             </td>
+                            <td style="text-align: center;">
+                                <button
+                                    onclick="showAddressHistory('${holder.address}')"
+                                    style="background: #667eea; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s;"
+                                    onmouseover="this.style.background='#5568d3'"
+                                    onmouseout="this.style.background='#667eea'"
+                                >
+                                    查看
+                                </button>
+                            </td>
                         </tr>
                     `;
                 }).join('');
@@ -1126,7 +1381,7 @@
                 document.getElementById('recordCount').textContent = `共 ${currentHolders.length} 条记录`;
             } catch (error) {
                 console.error('💥 更新持币表格失败:', error);
-                tbody.innerHTML = '<tr><td colspan="5" class="loading">数据渲染失败</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">数据渲染失败</td></tr>';
             }
         }
 
