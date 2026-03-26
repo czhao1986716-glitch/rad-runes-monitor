@@ -1081,6 +1081,43 @@
             }
         }
 
+        // 获取昨日的快照数据
+        function getYesterdaySnapshot() {
+            try {
+                const snapshots = JSON.parse(localStorage.getItem(CONFIG.ADDRESS_SNAPSHOTS_KEY) || '[]');
+
+                if (snapshots.length === 0) {
+                    return null;
+                }
+
+                // 获取昨天的日期
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayDate = yesterday.toISOString().split('T')[0];  // YYYY-MM-DD
+
+                // 查找昨天的快照
+                const yesterdaySnapshot = snapshots.find(s => s.date === yesterdayDate);
+
+                if (yesterdaySnapshot) {
+                    console.log('✅ 找到昨日快照:', yesterdayDate);
+                    return yesterdaySnapshot;
+                }
+
+                // 如果没有昨天的快照，尝试获取最近一次的快照
+                const sortedSnapshots = snapshots.sort((a, b) => b.timestamp - a.timestamp);
+                if (sortedSnapshots.length > 0) {
+                    const latestSnapshot = sortedSnapshots[0];
+                    console.log('⚠️ 未找到昨日快照，使用最近一次快照:', latestSnapshot.date);
+                    return latestSnapshot;
+                }
+
+                return null;
+            } catch (error) {
+                console.error('❌ 读取昨日快照失败:', error);
+                return null;
+            }
+        }
+
         // 对比数据，计算变化
         function compareHolders(currentHolders, previousHolders) {
             console.log('🔄 开始对比数据...');
@@ -1258,10 +1295,14 @@
                 const changes = compareHolders(currentHolders, previousData);
                 console.log('🔄 计算出的变化:', changes);
 
+                // 获取昨日快照
+                const yesterdaySnapshot = getYesterdaySnapshot();
+                console.log('📅 昨日快照:', yesterdaySnapshot ? '已找到' : '未找到');
+
                 // 更新UI
                 console.log('🎨 开始更新UI...');
                 updateStats(currentHolders, totalHolders);
-                updateHoldersTable(currentHolders, previousData ? previousData.holders : null);
+                updateHoldersTable(currentHolders, yesterdaySnapshot);
                 updateIntelligence(changes);
                 document.getElementById('lastUpdate').textContent = `更新于 ${formatTime(Date.now())}`;
 
@@ -1319,7 +1360,7 @@
         }
 
         // 更新持币表格
-        function updateHoldersTable(currentHolders, previousHolders) {
+        function updateHoldersTable(currentHolders, yesterdaySnapshot) {
             const tbody = document.querySelector('#holdersTable tbody');
 
             // 确保 currentHolders 是数组
@@ -1335,12 +1376,38 @@
             }
 
             try {
-                // 创建前一次数据的映射
-                const previousMap = new Map();
-                if (previousHolders && Array.isArray(previousHolders)) {
-                    previousHolders.forEach(h => {
-                        previousMap.set(h.address, parseFloat(h.amount) / 100);
+                // 创建昨日快照的映射
+                const yesterdayMap = new Map();
+                const yesterdayAddresses = new Set();
+
+                if (yesterdaySnapshot && yesterdaySnapshot.addresses && Array.isArray(yesterdaySnapshot.addresses)) {
+                    yesterdaySnapshot.addresses.forEach(h => {
+                        yesterdayMap.set(h.address, h.amount);
+                        yesterdayAddresses.add(h.address);
                     });
+                }
+
+                // 找出新进的地址和跌落的地址
+                const currentAddresses = new Set(currentHolders.map(h => h.address));
+                const newAddresses = [];  // 新进前100的地址
+                const droppedAddresses = [];  // 跌出前100的地址
+
+                // 找出新进地址
+                for (const address of currentAddresses) {
+                    if (!yesterdayAddresses.has(address)) {
+                        newAddresses.push(address);
+                    }
+                }
+
+                // 找出跌落地址
+                for (const address of yesterdayAddresses) {
+                    if (!currentAddresses.has(address)) {
+                        const yesterdayBalance = yesterdayMap.get(address);
+                        droppedAddresses.push({
+                            address,
+                            balance: yesterdayBalance
+                        });
+                    }
                 }
 
                 tbody.innerHTML = currentHolders.map((holder, index) => {
@@ -1350,14 +1417,21 @@
                     const percentage = ((balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
                     const isHighPercentage = parseFloat(percentage) >= 1;
 
-                    // 获取趋势
-                    const previousBalance = previousMap.get(holder.address);
-                    const trend = getTrendIcon(balance, previousBalance);
+                    // 判断是否是新进地址
+                    const isNew = !yesterdayAddresses.has(holder.address);
+
+                    // 获取趋势（与昨日比较）
+                    const yesterdayBalance = yesterdayMap.get(holder.address);
+                    const trend = getTrendIcon(balance, yesterdayBalance);
+
+                    // 新进地址使用绿色背景
+                    const rowStyle = isNew ? 'background: #d4edda;' : '';
+                    const newBadge = isNew ? '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; margin-left: 8px;">新进</span>' : '';
 
                     return `
-                        <tr>
+                        <tr style="${rowStyle}">
                             <td class="rank ${isTop10 ? 'top-10' : ''}">#${rank}</td>
-                            <td class="address">${formatAddress(holder.address)}</td>
+                            <td class="address">${formatAddress(holder.address)}${newBadge}</td>
                             <td class="balance">${formatNumber(balance)}</td>
                             <td class="percentage ${isHighPercentage ? 'high' : ''}">${percentage}%</td>
                             <td class="trend">
@@ -1378,7 +1452,42 @@
                     `;
                 }).join('');
 
-                document.getElementById('recordCount').textContent = `共 ${currentHolders.length} 条记录`;
+                // 如果有跌落的地址，添加到表格底部
+                if (droppedAddresses.length > 0) {
+                    const droppedRows = droppedAddresses.map(addr => {
+                        const balance = addr.balance;
+                        const percentage = ((balance / CONFIG.TOTAL_SUPPLY) * 100).toFixed(2);
+
+                        return `
+                            <tr style="background: #f8d7da;">
+                                <td class="rank">-</td>
+                                <td class="address">${formatAddress(addr.address)} <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; margin-left: 8px;">跌出</span></td>
+                                <td class="balance">${formatNumber(balance)}</td>
+                                <td class="percentage">${percentage}%</td>
+                                <td class="trend">
+                                    <div class="trend-icon down">↓</div>
+                                    <div class="trend-value">跌出前100</div>
+                                </td>
+                                <td style="text-align: center;">
+                                    <button
+                                        onclick="showAddressHistory('${addr.address}')"
+                                        style="background: #667eea; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s;"
+                                        onmouseover="this.style.background='#5568d3'"
+                                        onmouseout="this.style.background='#667eea'"
+                                    >
+                                        查看
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    tbody.innerHTML += droppedRows;
+                }
+
+                const totalCount = currentHolders.length + droppedAddresses.length;
+                const dropInfo = droppedAddresses.length > 0 ? `（其中 ${droppedAddresses.length} 个地址跌出前100）` : '';
+                document.getElementById('recordCount').textContent = `共 ${totalCount} 条记录${dropInfo}`;
             } catch (error) {
                 console.error('💥 更新持币表格失败:', error);
                 tbody.innerHTML = '<tr><td colspan="6" class="loading">数据渲染失败</td></tr>';
