@@ -580,7 +580,7 @@
                 <canvas id="addressChart"></canvas>
             </div>
             <p style="text-align: center; color: #666; margin-top: 15px; font-size: 0.9em;">
-                数据每天0点自动快照保存（显示前50地址）
+                数据每天0点自动快照保存（显示前150地址）
             </p>
         </div>
     </div>
@@ -1030,11 +1030,11 @@
                     const midnight = new Date(today);
                     midnight.setHours(0, 0, 0, 0);
 
-                    // 只保存前50个地址的快照，避免数据过大
+                    // 保存前150个地址的快照，以便准确比较前100地址的变化
                     const snapshot = {
                         date: todayDate,
                         timestamp: midnight.getTime(),
-                        addresses: holders.slice(0, 50).map(h => ({
+                        addresses: holders.slice(0, 150).map(h => ({
                             address: h.address,
                             amount: getHolderAmount(h)
                         }))
